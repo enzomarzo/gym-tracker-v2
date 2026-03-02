@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Dumbbell, Home, Plus, TrendingUp, LogOut, ClipboardList } from 'lucide-react'
+import { Dumbbell, Plus, TrendingUp, LogOut, ClipboardList } from 'lucide-react'
 import { logout } from '@/app/actions/auth'
 
 export function Navbar() {
@@ -14,7 +14,6 @@ export function Navbar() {
   }
 
   const navItems = [
-    { href: '/dashboard', label: 'Início', icon: Home },
     { href: '/workouts', label: 'Treinos', icon: ClipboardList },
     { href: '/workouts/new', label: 'Novo Treino', icon: Plus },
     { href: '/progress', label: 'Progresso', icon: TrendingUp },
@@ -22,14 +21,14 @@ export function Navbar() {
 
   return (
     <nav className="border-b bg-background">
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-2 sm:px-4">
         <div className="flex h-16 items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2 font-bold text-lg">
             <Dumbbell className="h-6 w-6" />
-            GymTracker
+            <span className="hidden sm:inline">GymTracker</span>
           </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             {navItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href

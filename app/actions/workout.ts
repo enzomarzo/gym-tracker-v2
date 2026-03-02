@@ -25,21 +25,42 @@ export async function createWorkout(formData: unknown) {
       return { error: 'Usuário não autenticado' }
     }
 
-    // 3. Criar workout no banco
-    const { data: workout, error: workoutError } = await supabase
+    // 3. Buscar ou criar workout do dia
+    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    
+    // Verificar se já existe workout hoje
+    const { data: existingWorkout } = await supabase
       .from('workouts')
-      .insert({ user_id: user.id })
-      .select()
+      .select('id')
+      .eq('user_id', user.id)
+      .gte('date', `${today}T00:00:00`)
+      .lt('date', `${today}T23:59:59`)
       .single()
 
-    if (workoutError) {
-      console.error('Erro ao criar workout:', workoutError)
-      return { error: 'Erro ao criar treino' }
+    let workoutId: string
+
+    if (existingWorkout) {
+      // Usar workout existente
+      workoutId = existingWorkout.id
+    } else {
+      // Criar novo workout
+      const { data: newWorkout, error: workoutError } = await supabase
+        .from('workouts')
+        .insert({ user_id: user.id })
+        .select()
+        .single()
+
+      if (workoutError) {
+        console.error('Erro ao criar workout:', workoutError)
+        return { error: 'Erro ao criar treino' }
+      }
+
+      workoutId = newWorkout.id
     }
 
     // 4. Criar sets
     const setsToInsert = result.data.sets.map((set) => ({
-      workout_id: workout.id,
+      workout_id: workoutId,
       exercise_id: set.exerciseId,
       weight: set.weight,
       reps: set.reps,

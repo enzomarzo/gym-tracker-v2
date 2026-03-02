@@ -27,8 +27,7 @@ export default function NewWorkoutPage() {
   const [selectedExercise, setSelectedExercise] = useState<string>('')
   const [sets, setSets] = useState<Set[]>([
     { id: '1', weight: '', reps: '' },
-    { id: '2', weight: '', reps: '' },
-    { id: '3', weight: '', reps: '' }
+    { id: '2', weight: '', reps: '' }
   ])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -91,8 +90,16 @@ export default function NewWorkoutPage() {
         return
       }
 
-      router.push('/dashboard')
-      router.refresh()
+      // Limpar formulário para adicionar outro exercício
+      setSelectedExercise('')
+      setSets([
+        { id: '1', weight: '', reps: '' },
+        { id: '2', weight: '', reps: '' }
+      ])
+      setError(null)
+      
+      // Mostrar mensagem de sucesso
+      alert('Exercício adicionado ao treino de hoje! Adicione mais exercícios ou volte ao dashboard.')
     } catch (err) {
       setError('Erro ao criar treino. Tente novamente.')
     } finally {
@@ -110,6 +117,11 @@ export default function NewWorkoutPage() {
           <p className="text-muted-foreground">
             Registre seu treino e acompanhe sua evolução
           </p>
+          <div className="mt-3 p-3 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-900">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              💡 Todos os exercícios que você adicionar hoje serão agrupados no mesmo treino.
+            </p>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -164,29 +176,33 @@ export default function NewWorkoutPage() {
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle>Séries</CardTitle>
-              <div className="flex gap-2">
-                {sets.length > 1 && (
+            <CardHeader className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <CardTitle>Séries</CardTitle>
+                <div className="flex gap-2 flex-wrap">
+                  {sets.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={replicateLastSet}
+                      className="flex-1 sm:flex-none"
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      Replicar
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={replicateLastSet}
+                    onClick={addSet}
+                    className="flex-1 sm:flex-none"
                   >
-                    <Copy className="h-4 w-4 mr-2" />
-                    Replicar
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nova Série
                   </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addSet}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nova Série
-                </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -234,22 +250,22 @@ export default function NewWorkoutPage() {
             <p className="text-sm text-destructive">{error}</p>
           )}
 
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.back()}
+              onClick={() => router.push('/dashboard')}
               disabled={isSubmitting}
               className="flex-1"
             >
-              Cancelar
+              Finalizar Treino
             </Button>
             <Button
               type="submit"
               disabled={isSubmitting}
               className="flex-1"
             >
-              {isSubmitting ? 'Salvando...' : 'Salvar Treino'}
+              {isSubmitting ? 'Salvando...' : 'Adicionar Exercício'}
             </Button>
           </div>
         </form>
