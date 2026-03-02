@@ -142,6 +142,45 @@ export default function WorkoutsPage() {
     return Object.values(grouped)
   }
 
+  const groupByMuscleGroup = (exerciseGroups: ReturnType<typeof groupSetsByExercise>) => {
+    const byMuscleGroup = exerciseGroups.reduce((acc, { exercise, sets }) => {
+      const muscleGroupId = exercise.muscle_group_id
+      if (!acc[muscleGroupId]) {
+        acc[muscleGroupId] = {
+          muscleGroupId,
+          exercises: []
+        }
+      }
+      acc[muscleGroupId].exercises.push({ exercise, sets })
+      return acc
+    }, {} as Record<string, { muscleGroupId: string, exercises: { exercise: WorkoutSet['exercise'], sets: WorkoutSet[] }[] }>)
+
+    return Object.values(byMuscleGroup)
+  }
+
+  const getMuscleGroupName = (muscleGroupId: string) => {
+    const group = muscleGroups.find(g => g.id === muscleGroupId)
+    return group?.name || 'Grupo não identificado'
+  }
+
+  const formatSets = (sets: WorkoutSet[]) => {
+    // Verificar se todas as séries têm o mesmo peso e reps
+    const firstSet = sets[0]
+    const allSame = sets.every(set => set.weight === firstSet.weight && set.reps === firstSet.reps)
+
+    if (allSame && sets.length > 1) {
+      return `${sets.length} séries de ${firstSet.reps} reps com ${firstSet.weight}kg`
+    }
+
+    // Se não são todas iguais ou é apenas 1 série, listar individualmente
+    return sets.map((set, idx) => ({
+      text: sets.length > 1 
+        ? `${idx + 1}ª série: ${set.reps} reps com ${set.weight}kg`
+        : `${set.reps} reps com ${set.weight}kg`,
+      id: set.id
+    }))
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -213,58 +252,84 @@ export default function WorkoutsPage() {
           <div className="space-y-4">
             {filteredWorkouts.map(workout => {
               const groupedSets = groupSetsByExercise(workout.workout_sets)
+              const muscleGroupSections = groupByMuscleGroup(groupedSets)
               
               return (
                 <Card key={workout.id}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-5 w-5" />
-                        <CardTitle className="text-lg">
-                          {new Date(workout.date).toLocaleDateString('pt-BR', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </CardTitle>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Calendar className="h-4 w-4" />
+                          <span className="text-sm">
+                            {new Date(workout.date).toLocaleDateString('pt-BR', {
+                              weekday: 'long',
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
+                            })}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex gap-2">
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="icon"
                           onClick={() => router.push(`/workouts/${workout.id}/edit`)}
+                          title="Editar"
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="icon"
                           onClick={() => handleDelete(workout.id)}
+                          title="Excluir"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {groupedSets.map(({ exercise, sets }) => (
-                        <div key={exercise.id} className="border-l-2 border-primary pl-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Dumbbell className="h-4 w-4" />
-                            <h3 className="font-semibold">{exercise.name}</h3>
-                          </div>
-                          <div className="space-y-1">
-                            {sets.map(set => (
-                              <div key={set.id} className="text-sm text-muted-foreground">
-                                Série {set.set_number}: {set.weight}kg × {set.reps} reps
-                              </div>
-                            ))}
-                          </div>
+                  <CardContent className="space-y-6">
+                    {muscleGroupSections.map((section, idx) => (
+                      <div key={idx} className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-1 bg-primary rounded-full" />
+                          <h3 className="text-lg font-bold">
+                            {getMuscleGroupName(section.muscleGroupId)}
+                          </h3>
                         </div>
-                      ))}
-                    </div>
+                        
+                        <div className="space-y-4 pl-4">
+                          {section.exercises.map(({ exercise, sets }) => {
+                            const formattedSets = formatSets(sets)
+                            
+                            return (
+                              <div key={exercise.id} className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <Dumbbell className="h-4 w-4 text-muted-foreground" />
+                                  <h4 className="font-semibold text-base">{exercise.name}</h4>
+                                </div>
+                                <div className="pl-6">
+                                  {typeof formattedSets === 'string' ? (
+                                    <p className="text-sm text-muted-foreground">{formattedSets}</p>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      {formattedSets.map(set => (
+                                        <p key={set.id} className="text-sm text-muted-foreground">
+                                          {set.text}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </CardContent>
                 </Card>
               )
