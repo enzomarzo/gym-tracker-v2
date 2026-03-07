@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { Navbar } from '@/components/Navbar'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Pencil, Trash2, Calendar, Dumbbell } from 'lucide-react'
 import { useMuscleGroups } from '@/hooks/useExercises'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { deleteWorkout } from '@/app/actions/workout'
+import { WorkoutCard } from '@/components/WorkoutCard'
 
 interface WorkoutSet {
   id: string
@@ -109,12 +108,22 @@ export default function WorkoutsPage() {
     setFilteredWorkouts(filtered)
   }
 
-  const handleDelete = async (workoutId: string) => {
+  const handleDelete = async (workoutIds: string[]) => {
     if (!confirm('Tem certeza que deseja excluir este treino?')) return
 
     try {
-      await deleteWorkout(workoutId)
-      setWorkouts(workouts.filter(w => w.id !== workoutId))
+      // Deletar todos os workouts do dia
+      for (const workoutId of workoutIds) {
+        const result = await deleteWorkout(workoutId)
+        if (result.error) {
+          console.error('Erro ao excluir workout:', result.error)
+          alert(`Erro ao excluir treino: ${result.error}`)
+          return
+        }
+      }
+      
+      // Atualizar estado local
+      setWorkouts(workouts.filter(w => !workoutIds.includes(w.id)))
     } catch (err) {
       console.error('Erro ao excluir treino:', err)
       alert('Erro ao excluir treino')
@@ -126,59 +135,23 @@ export default function WorkoutsPage() {
     return [...new Set(dates)]
   }
 
-  const groupSetsByExercise = (sets: WorkoutSet[]) => {
-    const grouped = sets.reduce((acc, set) => {
-      const exerciseId = set.exercise.id
-      if (!acc[exerciseId]) {
-        acc[exerciseId] = {
-          exercise: set.exercise,
-          sets: []
+  // Agrupar workouts por data
+  const groupWorkoutsByDate = (workouts: Workout[]) => {
+    const grouped = workouts.reduce((acc, workout) => {
+      const dateKey = workout.date.split('T')[0] // Pega apenas a parte da data (YYYY-MM-DD)
+      if (!acc[dateKey]) {
+        acc[dateKey] = {
+          ids: [],
+          date: workout.date,
+          allSets: []
         }
       }
-      acc[exerciseId].sets.push(set)
+      acc[dateKey].ids.push(workout.id)
+      acc[dateKey].allSets.push(...workout.workout_sets)
       return acc
-    }, {} as Record<string, { exercise: WorkoutSet['exercise'], sets: WorkoutSet[] }>)
+    }, {} as Record<string, { ids: string[], date: string, allSets: WorkoutSet[] }>)
 
     return Object.values(grouped)
-  }
-
-  const groupByMuscleGroup = (exerciseGroups: ReturnType<typeof groupSetsByExercise>) => {
-    const byMuscleGroup = exerciseGroups.reduce((acc, { exercise, sets }) => {
-      const muscleGroupId = exercise.muscle_group_id
-      if (!acc[muscleGroupId]) {
-        acc[muscleGroupId] = {
-          muscleGroupId,
-          exercises: []
-        }
-      }
-      acc[muscleGroupId].exercises.push({ exercise, sets })
-      return acc
-    }, {} as Record<string, { muscleGroupId: string, exercises: { exercise: WorkoutSet['exercise'], sets: WorkoutSet[] }[] }>)
-
-    return Object.values(byMuscleGroup)
-  }
-
-  const getMuscleGroupName = (muscleGroupId: string) => {
-    const group = muscleGroups.find(g => g.id === muscleGroupId)
-    return group?.name || 'Grupo não identificado'
-  }
-
-  const formatSets = (sets: WorkoutSet[]) => {
-    // Verificar se todas as séries têm o mesmo peso e reps
-    const firstSet = sets[0]
-    const allSame = sets.every(set => set.weight === firstSet.weight && set.reps === firstSet.reps)
-
-    if (allSame && sets.length > 1) {
-      return `${sets.length} séries de ${firstSet.reps} reps com ${firstSet.weight}kg`
-    }
-
-    // Se não são todas iguais ou é apenas 1 série, listar individualmente
-    return sets.map((set, idx) => ({
-      text: sets.length > 1 
-        ? `${idx + 1}ª série: ${set.reps} reps com ${set.weight}kg`
-        : `${set.reps} reps com ${set.weight}kg`,
-      id: set.id
-    }))
   }
 
   if (loading) {
@@ -250,90 +223,16 @@ export default function WorkoutsPage() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {filteredWorkouts.map(workout => {
-              const groupedSets = groupSetsByExercise(workout.workout_sets)
-              const muscleGroupSections = groupByMuscleGroup(groupedSets)
-              
-              return (
-                <Card key={workout.id}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span className="text-sm">
-                            {new Date(workout.date).toLocaleDateString('pt-BR', {
-                              weekday: 'long',
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric'
-                            })}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => router.push(`/workouts/${workout.id}/edit`)}
-                          title="Editar"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(workout.id)}
-                          title="Excluir"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {muscleGroupSections.map((section, idx) => (
-                      <div key={idx} className="space-y-4">
-                        <div className="flex items-center gap-2">
-                          <div className="h-6 w-1 bg-primary rounded-full" />
-                          <h3 className="text-lg font-bold">
-                            {getMuscleGroupName(section.muscleGroupId)}
-                          </h3>
-                        </div>
-                        
-                        <div className="space-y-4 pl-4">
-                          {section.exercises.map(({ exercise, sets }) => {
-                            const formattedSets = formatSets(sets)
-                            
-                            return (
-                              <div key={exercise.id} className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <Dumbbell className="h-4 w-4 text-muted-foreground" />
-                                  <h4 className="font-semibold text-base">{exercise.name}</h4>
-                                </div>
-                                <div className="pl-6">
-                                  {typeof formattedSets === 'string' ? (
-                                    <p className="text-sm text-muted-foreground">{formattedSets}</p>
-                                  ) : (
-                                    <div className="space-y-1">
-                                      {formattedSets.map(set => (
-                                        <p key={set.id} className="text-sm text-muted-foreground">
-                                          {set.text}
-                                        </p>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )
-            })}
+            {groupWorkoutsByDate(filteredWorkouts).map((dayGroup) => (
+              <WorkoutCard
+                key={dayGroup.date}
+                date={dayGroup.date}
+                workoutSets={dayGroup.allSets}
+                muscleGroups={muscleGroups}
+                onEdit={() => router.push(`/workouts/${dayGroup.ids[0]}/edit`)}
+                onDelete={() => handleDelete(dayGroup.ids)}
+              />
+            ))}
           </div>
         )}
       </main>

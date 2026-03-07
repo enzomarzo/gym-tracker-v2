@@ -1,8 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
 import { Navbar } from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useMuscleGroups, useExercises } from '@/hooks/useExercises'
 import { createWorkout } from '@/app/actions/workout'
 import { Plus, Copy, Trash2 } from 'lucide-react'
+import { createClient } from '@/utils/supabase/client'
 
 interface Set {
   id: string
@@ -31,6 +31,69 @@ export default function NewWorkoutPage() {
   ])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadingLastWorkout, setLoadingLastWorkout] = useState(false)
+
+  useEffect(() => {
+    if (!selectedExercise) {
+      setSets([
+        { id: '1', weight: '', reps: '' },
+        { id: '2', weight: '', reps: '' }
+      ])
+      return
+    }
+
+    const fetchLastWorkout = async () => {
+      setLoadingLastWorkout(true)
+      
+      setSets([
+        { id: '1', weight: '', reps: '' },
+        { id: '2', weight: '', reps: '' }
+      ])
+
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (!user) return
+
+        const { data: lastWorkout } = await supabase
+          .from('workouts')
+          .select(`
+            id,
+            date,
+            workout_sets!inner (
+              weight,
+              reps,
+              set_number,
+              exercise_id
+            )
+          `)
+          .eq('user_id', user.id)
+          .eq('workout_sets.exercise_id', selectedExercise)
+          .order('date', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (lastWorkout && lastWorkout.workout_sets && lastWorkout.workout_sets.length > 0) {
+          const sortedSets = [...lastWorkout.workout_sets].sort((a: any, b: any) => a.set_number - b.set_number)
+
+          const preFillSets = sortedSets.map((set: any, index: number) => ({
+            id: (index + 1).toString(),
+            weight: set.weight.toString(),
+            reps: set.reps.toString()
+          }))
+
+          setSets(preFillSets)
+        }
+      } catch (err) {
+        console.error('Erro ao buscar último treino:', err)
+      } finally {
+        setLoadingLastWorkout(false)
+      }
+    }
+
+    fetchLastWorkout()
+  }, [selectedExercise])
 
   const addSet = () => {
     const newId = (sets.length + 1).toString()
@@ -90,7 +153,6 @@ export default function NewWorkoutPage() {
         return
       }
 
-      // Limpar formulário para adicionar outro exercício
       setSelectedExercise('')
       setSets([
         { id: '1', weight: '', reps: '' },
@@ -98,7 +160,6 @@ export default function NewWorkoutPage() {
       ])
       setError(null)
       
-      // Mostrar mensagem de sucesso
       alert('Exercício adicionado ao treino de hoje! Adicione mais exercícios ou volte ao dashboard.')
     } catch (err) {
       setError('Erro ao criar treino. Tente novamente.')
@@ -204,6 +265,13 @@ export default function NewWorkoutPage() {
                   </Button>
                 </div>
               </div>
+              {selectedExercise && sets[0]?.weight && (
+                <div className="p-3 rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-900">
+                  <p className="text-sm text-green-800 dark:text-green-200">
+                    ✓ Dados do último treino carregados. Você pode ajustar os valores conforme necessário.
+                  </p>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               {sets.map((set, index) => (

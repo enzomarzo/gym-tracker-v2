@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp"
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp", "--api-key", "ctx7sk-1c1c8af1-2771-4c60-aa5a-472050cdbfc8"]
+    }
+  }
+}
