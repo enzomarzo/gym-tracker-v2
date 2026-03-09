@@ -7,41 +7,35 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useMuscleGroups, useExercises } from '@/hooks/useExercises'
-import { updateWorkout } from '@/app/actions/workout'
-import { Plus, Copy, Trash2 } from 'lucide-react'
+import { Plus, Copy, Trash2, Dumbbell } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 
 interface Set {
   id: string
   weight: string
   reps: string
+  dbId: string // ID do banco de dados
 }
 
-interface WorkoutSet {
-  id: string
-  weight: number
-  reps: number
-  set_number: number
-  exercise_id: string
+interface ExerciseGroup {
+  exerciseId: string
+  exerciseName: string
+  muscleGroupName: string
+  sets: Set[]
 }
 
 interface WorkoutData {
   id: string
   date: string
-  workout_sets: WorkoutSet[]
+  workout_sets: any[]
 }
 
 export default function EditWorkoutPage() {
   const router = useRouter()
   const params = useParams()
   const workoutId = params.id as string
-  const { muscleGroups, loading: loadingGroups } = useMuscleGroups()
-  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string>('')
-  const { exercises, loading: loadingExercises } = useExercises(selectedMuscleGroup)
-  const [selectedExercise, setSelectedExercise] = useState<string>('')
-  const [sets, setSets] = useState<Set[]>([])
+  const [exerciseGroups, setExerciseGroups] = useState<ExerciseGroup[]>([])
+  const [workoutDate, setWorkoutDate] = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -51,16 +45,6 @@ export default function EditWorkoutPage() {
       fetchWorkout()
     }
   }, [workoutId])
-
-  useEffect(() => {
-    // Quando o exercício é carregado, definir o grupo muscular
-    if (selectedExercise && exercises.length > 0) {
-      const exercise = exercises.find(e => e.id === selectedExercise)
-      if (exercise) {
-        setSelectedMuscleGroup(exercise.muscle_group_id)
-      }
-    }
-  }, [selectedExercise, exercises])
 
   const fetchWorkout = async () => {
     try {
@@ -80,7 +64,9 @@ export default function EditWorkoutPage() {
             exercises (
               id,
               name,
-              muscle_group_id
+              muscle_groups (
+                name
+              )
             )
           )
         `)
@@ -93,24 +79,29 @@ export default function EditWorkoutPage() {
         return
       }
 
-      if (data.workout_sets && data.workout_sets.length > 0) {
-        // Pegar o primeiro exercício
-        const firstSet = data.workout_sets[0]
-        const exerciseId = firstSet.exercise_id
-        const muscleGroupId = (firstSet.exercises as any).muscle_group_id
-        
-        setSelectedExercise(exerciseId)
-        setSelectedMuscleGroup(muscleGroupId)
-        
-        // Converter os sets
-        const loadedSets = data.workout_sets.map((set, index) => ({
-          id: (index + 1).toString(),
+      setWorkoutDate(data.date)
+
+      // Agrupar séries por exercício
+      const groupedByExercise = data.workout_sets.reduce((acc: any, set: any) => {
+        const exerciseId = set.exercise_id
+        if (!acc[exerciseId]) {
+          acc[exerciseId] = {
+            exerciseId,
+            exerciseName: set.exercises.name,
+            muscleGroupName: set.exercises.muscle_groups.name,
+            sets: []
+          }
+        }
+        acc[exerciseId].sets.push({
+          id: acc[exerciseId].sets.length.toString(),
+          dbId: set.id,
           weight: set.weight.toString(),
           reps: set.reps.toString()
-        }))
-        
-        setSets(loadedSets)
-      }
+        })
+        return acc
+      }, {})
+
+      setExerciseGroups(Object.values(groupedByExercise))
     } catch (err) {
       console.error('Erro ao carregar treino:', err)
       setError('Erro ao carregar treino')
@@ -119,63 +110,93 @@ export default function EditWorkoutPage() {
     }
   }
 
-  const addSet = () => {
-    const newId = (sets.length + 1).toString()
-    setSets([...sets, { id: newId, weight: '', reps: '' }])
+  const addSet = (exerciseIndex: number) => {
+    const newGroups = [...exerciseGroups]
+    const newSetId = newGroups[exerciseIndex].sets.length.toString()
+    newGroups[exerciseIndex].sets.push({
+      id: newSetId,
+      dbId: '',
+      weight: '',
+      reps: ''
+    })
+    setExerciseGroups(newGroups)
   }
 
-  const replicateLastSet = () => {
+  const replicateLastSet = (exerciseIndex: number) => {
+    const sets = exerciseGroups[exerciseIndex].sets
     if (sets.length === 0) return
     const lastSet = sets[sets.length - 1]
-    const newId = (sets.length + 1).toString()
-    setSets([...sets, { id: newId, weight: lastSet.weight, reps: lastSet.reps }])
+    const newSetId = sets.length.toString()
+    const newGroups = [...exerciseGroups]
+    newGroups[exerciseIndex].sets.push({
+      id: newSetId,
+      dbId: '',
+      weight: lastSet.weight,
+      reps: lastSet.reps
+    })
+    setExerciseGroups(newGroups)
   }
 
-  const removeSet = (id: string) => {
-    if (sets.length === 1) return
-    setSets(sets.filter(set => set.id !== id))
+  const removeSet = (exerciseIndex: number, setId: string) => {
+    const newGroups = [...exerciseGroups]
+    if (newGroups[exerciseIndex].sets.length === 1) return
+    newGroups[exerciseIndex].sets = newGroups[exerciseIndex].sets.filter(set => set.id !== setId)
+    // Reindexar IDs
+    newGroups[exerciseIndex].sets.forEach((set, idx) => {
+      set.id = idx.toString()
+    })
+    setExerciseGroups(newGroups)
   }
 
-  const updateSet = (id: string, field: 'weight' | 'reps', value: string) => {
-    setSets(sets.map(set =>
-      set.id === id ? { ...set, [field]: value } : set
-    ))
+  const updateSet = (exerciseIndex: number, setId: string, field: 'weight' | 'reps', value: string) => {
+    const newGroups = [...exerciseGroups]
+    const setIndex = newGroups[exerciseIndex].sets.findIndex(s => s.id === setId)
+    if (setIndex !== -1) {
+      newGroups[exerciseIndex].sets[setIndex][field] = value
+    }
+    setExerciseGroups(newGroups)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    if (!selectedMuscleGroup || !selectedExercise) {
-      setError('Selecione um grupo muscular e um exercício')
-      return
-    }
-
-    if (sets.some(set => !set.weight || !set.reps)) {
-      setError('Preencha peso e repetições de todas as séries')
-      return
+    // Validar que todos os campos estão preenchidos
+    for (const group of exerciseGroups) {
+      if (group.sets.some(set => !set.weight || !set.reps)) {
+        setError(`Preencha peso e repetições de todas as séries de ${group.exerciseName}`)
+        return
+      }
     }
 
     try {
       setIsSubmitting(true)
+      const supabase = createClient()
 
-      const formData = {
-        muscleGroupId: selectedMuscleGroup,
-        exerciseId: selectedExercise,
-        sets: sets.map((set, index) => ({
-          exerciseId: selectedExercise,
+      // Deletar todos os sets antigos
+      const { error: deleteError } = await supabase
+        .from('workout_sets')
+        .delete()
+        .eq('workout_id', workoutId)
+
+      if (deleteError) throw deleteError
+
+      // Inserir novos sets
+      const allSets = exerciseGroups.flatMap(group =>
+        group.sets.map((set, index) => ({
+          workout_id: workoutId,
+          exercise_id: group.exerciseId,
           weight: parseFloat(set.weight),
           reps: parseInt(set.reps),
-          setNumber: index + 1
+          set_number: index + 1
         }))
-      }
+      )
 
-      const result = await updateWorkout(workoutId, formData)
+      const { error: insertError } = await supabase
+        .from('workout_sets')
+        .insert(allSets)
 
-      if (result.error) {
-        setError(result.error)
-        return
-      }
+      if (insertError) throw insertError
 
       router.push('/workouts')
     } catch (err) {
@@ -201,91 +222,71 @@ export default function EditWorkoutPage() {
     <div className="min-h-screen bg-background">
       <Navbar />
       
-      <main className="container mx-auto px-4 py-8 max-w-2xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Editar Treino</h1>
-          <p className="text-muted-foreground">
-            Modifique os dados do seu treino
-          </p>
+      <main className="container mx-auto px-4 py-8 max-w-3xl">
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Editar Treino</h1>
+            {workoutDate && (
+              <p className="text-muted-foreground">
+                {new Date(workoutDate + 'T00:00:00').toLocaleDateString('pt-BR', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </p>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => router.push('/workouts')}
+            type="button"
+          >
+            Voltar
+          </Button>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Dados do Treino</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Seletor de Grupo Muscular */}
-              <div className="space-y-2">
-                <Label>Grupo Muscular</Label>
-                <Select
-                  value={selectedMuscleGroup}
-                  onValueChange={setSelectedMuscleGroup}
-                  disabled={loadingGroups}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o grupo muscular" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {muscleGroups.map(group => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Seletor de Exercício */}
-              <div className="space-y-2">
-                <Label>Exercício</Label>
-                <Select
-                  value={selectedExercise}
-                  onValueChange={setSelectedExercise}
-                  disabled={!selectedMuscleGroup || loadingExercises}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o exercício" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {exercises.map(exercise => (
-                      <SelectItem key={exercise.id} value={exercise.id}>
-                        {exercise.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Séries */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label>Séries</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={replicateLastSet}
-                      disabled={sets.length === 0}
-                    >
-                      <Copy className="h-4 w-4 mr-2" />
-                      Replicar Última
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addSet}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Adicionar Série
-                    </Button>
+        {error && exerciseGroups.length === 0 ? (
+          <div className="bg-red-100 p-4 rounded-md text-red-700">
+            {error}
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {exerciseGroups.map((group, groupIndex) => (
+              <Card key={groupIndex}>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>{group.exerciseName}</CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {group.muscleGroupName}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => replicateLastSet(groupIndex)}
+                        disabled={group.sets.length === 0}
+                      >
+                        <Copy className="h-4 w-4 mr-1" />
+                        Replicar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addSet(groupIndex)}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Série
+                      </Button>
+                    </div>
                   </div>
-                </div>
-
-                <div className="space-y-3">
-                  {sets.map((set, index) => (
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {group.sets.map((set, index) => (
                     <div key={set.id} className="flex items-end gap-3">
                       <div className="flex-none w-16">
                         {index === 0 && <Label className="text-xs">Série</Label>}
@@ -296,31 +297,31 @@ export default function EditWorkoutPage() {
                       
                       <div className="flex-1">
                         {index === 0 && (
-                          <Label htmlFor={`weight-${set.id}`} className="text-xs">
+                          <Label htmlFor={`weight-${groupIndex}-${set.id}`} className="text-xs">
                             Peso (kg)
                           </Label>
                         )}
                         <Input
-                          id={`weight-${set.id}`}
+                          id={`weight-${groupIndex}-${set.id}`}
                           type="number"
                           step="0.5"
                           value={set.weight}
-                          onChange={(e) => updateSet(set.id, 'weight', e.target.value)}
+                          onChange={(e) => updateSet(groupIndex, set.id, 'weight', e.target.value)}
                           placeholder="0"
                         />
                       </div>
 
                       <div className="flex-1">
                         {index === 0 && (
-                          <Label htmlFor={`reps-${set.id}`} className="text-xs">
+                          <Label htmlFor={`reps-${groupIndex}-${set.id}`} className="text-xs">
                             Repetições
                           </Label>
                         )}
                         <Input
-                          id={`reps-${set.id}`}
+                          id={`reps-${groupIndex}-${set.id}`}
                           type="number"
                           value={set.reps}
-                          onChange={(e) => updateSet(set.id, 'reps', e.target.value)}
+                          onChange={(e) => updateSet(groupIndex, set.id, 'reps', e.target.value)}
                           placeholder="0"
                         />
                       </div>
@@ -329,43 +330,43 @@ export default function EditWorkoutPage() {
                         type="button"
                         variant="outline"
                         size="icon"
-                        onClick={() => removeSet(set.id)}
-                        disabled={sets.length === 1}
+                        onClick={() => removeSet(groupIndex, set.id)}
+                        disabled={group.sets.length === 1}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
+            ))}
 
-              {error && (
-                <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-                  {error}
-                </div>
-              )}
-
-              <div className="flex gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => router.push('/workouts')}
-                  disabled={isSubmitting}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  className="flex-1"
-                  disabled={isSubmitting || !selectedExercise}
-                >
-                  {isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
-                </Button>
+            {error && (
+              <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                {error}
               </div>
-            </form>
-          </CardContent>
-        </Card>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => router.push('/workouts')}
+                disabled={isSubmitting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={isSubmitting || exerciseGroups.length === 0}
+              >
+                {isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
+              </Button>
+            </div>
+          </form>
+        )}
       </main>
     </div>
   )
