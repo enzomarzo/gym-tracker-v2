@@ -103,20 +103,40 @@ export function WorkoutCard({ date, workoutSets, muscleGroups = [], onEdit, onDe
   const groupedSets = groupSetsByExercise(workoutSets)
   const muscleGroupSections = groupByMuscleGroup(groupedSets)
 
+  // Calcular estatísticas do dia
+  const totalExercises = groupedSets.length
+  const totalSets = workoutSets.length
+  const musclesTrainedNames = muscleGroupSections
+    .map(section => getMuscleGroupName(section.muscleGroupId))
+    .join(', ')
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-            <span className="text-sm font-medium">
-              {new Date(date).toLocaleDateString('pt-BR', {
-                weekday: 'long',
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-              })}
-            </span>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              <span className="text-sm font-medium">
+                {new Date(date).toLocaleDateString('pt-BR', {
+                  weekday: 'long',
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric'
+                })}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span className="bg-muted px-2 py-1 rounded">
+                {totalExercises} {totalExercises === 1 ? 'exercício' : 'exercícios'}
+              </span>
+              <span className="bg-muted px-2 py-1 rounded">
+                {totalSets} {totalSets === 1 ? 'série' : 'séries'}
+              </span>
+              <span className="bg-primary/10 text-primary px-2 py-1 rounded font-medium">
+                {musclesTrainedNames}
+              </span>
+            </div>
           </div>
           {(onEdit || onDelete) && (
             <div className="flex gap-2">

@@ -26,15 +26,15 @@ export async function createWorkout(formData: unknown) {
     }
 
     // 3. Buscar ou criar workout do dia
-    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const workoutDate = result.data.workoutDate
     
-    // Verificar se já existe workout hoje
+    // Verificar se já existe workout nessa data
     const { data: existingWorkout } = await supabase
       .from('workouts')
       .select('id')
       .eq('user_id', user.id)
-      .gte('date', `${today}T00:00:00`)
-      .lt('date', `${today}T23:59:59`)
+      .gte('date', `${workoutDate}T00:00:00`)
+      .lt('date', `${workoutDate}T23:59:59`)
       .single()
 
     let workoutId: string
@@ -43,10 +43,13 @@ export async function createWorkout(formData: unknown) {
       // Usar workout existente
       workoutId = existingWorkout.id
     } else {
-      // Criar novo workout
+      // Criar novo workout com a data especificada
       const { data: newWorkout, error: workoutError } = await supabase
         .from('workouts')
-        .insert({ user_id: user.id })
+        .insert({ 
+          user_id: user.id,
+          date: `${workoutDate}T12:00:00` // Meio-dia para evitar problemas de fuso horário
+        })
         .select()
         .single()
 

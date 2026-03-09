@@ -171,9 +171,9 @@ export default function WorkoutsPage() {
       
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Meus Treinos</h1>
+          <h1 className="text-3xl font-bold mb-2">Histórico de Treinos</h1>
           <p className="text-muted-foreground">
-            Visualize, edite e gerencie seus treinos
+            Visualize seus treinos organizados por dia. Cada card representa um dia completo de treino com todos os exercícios realizados.
           </p>
         </div>
 
@@ -217,7 +217,9 @@ export default function WorkoutsPage() {
           <Card>
             <CardContent className="py-8 text-center">
               <p className="text-muted-foreground">
-                Nenhum treino encontrado com os filtros selecionados
+                {workouts.length === 0 
+                  ? 'Nenhum treino registrado ainda. Comece adicionando seu primeiro treino!'
+                  : 'Nenhum treino encontrado com os filtros selecionados'}
               </p>
             </CardContent>
           </Card>

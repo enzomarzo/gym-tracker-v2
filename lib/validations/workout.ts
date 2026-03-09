@@ -21,6 +21,7 @@ export const workoutSetSchema = z.object({
 })
 
 export const workoutFormSchema = z.object({
+  workoutDate: z.string().min(1, 'Data é obrigatória'),
   muscleGroupId: z.string().uuid('Grupo muscular inválido'),
   exerciseId: z.string().uuid('Exercício inválido'),
   sets: z

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Navbar } from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useMuscleGroups, useExercises } from '@/hooks/useExercises'
 import { createWorkout } from '@/app/actions/workout'
-import { Plus, Copy, Trash2 } from 'lucide-react'
+import { Plus, Copy, Trash2, Dumbbell } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 
 interface Set {
@@ -19,12 +19,26 @@ interface Set {
   reps: string
 }
 
+interface TodayWorkoutSet {
+  id: string
+  weight: number
+  reps: number
+  set_number: number
+  exercise: {
+    name: string
+    muscle_group_id: string
+  }
+}
+
 export default function NewWorkoutPage() {
   const router = useRouter()
   const { muscleGroups, loading: loadingGroups } = useMuscleGroups()
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string>('')
   const { exercises, loading: loadingExercises } = useExercises(selectedMuscleGroup)
   const [selectedExercise, setSelectedExercise] = useState<string>('')
+  const [workoutDate, setWorkoutDate] = useState<string>(
+    new Date().toISOString().split('T')[0] // Data de hoje como padrão (YYYY-MM-DD)
+  )
   const [sets, setSets] = useState<Set[]>([
     { id: '1', weight: '', reps: '' },
     { id: '2', weight: '', reps: '' }
@@ -32,6 +46,8 @@ export default function NewWorkoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingLastWorkout, setLoadingLastWorkout] = useState(false)
+  const [todayWorkoutSets, setTodayWorkoutSets] = useState<TodayWorkoutSet[]>([])
+  const [loadingTodaySets, setLoadingTodaySets] = useState(false)
 
   useEffect(() => {
     if (!selectedExercise) {
@@ -95,6 +111,53 @@ export default function NewWorkoutPage() {
     fetchLastWorkout()
   }, [selectedExercise])
 
+  // Buscar séries já adicionadas no dia selecionado
+  const fetchTodayWorkoutSets = useCallback(async () => {
+    if (!workoutDate) return
+    
+    setLoadingTodaySets(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) return
+
+      const { data: workouts } = await supabase
+        .from('workouts')
+        .select(`
+          id,
+          workout_sets (
+            id,
+            weight,
+            reps,
+            set_number,
+            exercise:exercises (
+              name,
+              muscle_group_id
+            )
+          )
+        `)
+        .eq('user_id', user.id)
+        .gte('date', `${workoutDate}T00:00:00`)
+        .lt('date', `${workoutDate}T23:59:59`)
+
+      if (workouts && workouts.length > 0) {
+        const allSets = workouts.flatMap(w => w.workout_sets || [])
+        setTodayWorkoutSets(allSets as any)
+      } else {
+        setTodayWorkoutSets([])
+      }
+    } catch (err) {
+      console.error('Erro ao buscar séries do dia:', err)
+    } finally {
+      setLoadingTodaySets(false)
+    }
+  }, [workoutDate])
+
+  useEffect(() => {
+    fetchTodayWorkoutSets()
+  }, [fetchTodayWorkoutSets])
+
   const addSet = () => {
     const newId = (sets.length + 1).toString()
     setSets([...sets, { id: newId, weight: '', reps: '' }])
@@ -122,6 +185,11 @@ export default function NewWorkoutPage() {
     e.preventDefault()
     setError(null)
 
+    if (!workoutDate) {
+      setError('Selecione a data do treino')
+      return
+    }
+
     if (!selectedMuscleGroup || !selectedExercise) {
       setError('Selecione um grupo muscular e um exercício')
       return
@@ -136,6 +204,7 @@ export default function NewWorkoutPage() {
       setIsSubmitting(true)
 
       const formData = {
+        workoutDate,
         muscleGroupId: selectedMuscleGroup,
         exerciseId: selectedExercise,
         sets: sets.map((set, index) => ({
@@ -160,7 +229,11 @@ export default function NewWorkoutPage() {
       ])
       setError(null)
       
-      alert('Exercício adicionado ao treino de hoje! Adicione mais exercícios ou volte ao dashboard.')
+      // Recarregar séries do dia
+      await fetchTodayWorkoutSets()
+      
+      const selectedDate = new Date(workoutDate).toLocaleDateString('pt-BR')
+      alert(`Exercício adicionado ao treino de ${selectedDate}! Adicione mais exercícios ou volte ao dashboard.`)
     } catch (err) {
       setError('Erro ao criar treino. Tente novamente.')
     } finally {
@@ -172,7 +245,7 @@ export default function NewWorkoutPage() {
     <div className="min-h-screen bg-background">
       <Navbar />
       
-      <main className="container mx-auto px-4 py-8 max-w-2xl">
+      <main className="container mx-auto px-4 py-8 max-w-5xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Novo Treino</h1>
           <p className="text-muted-foreground">
@@ -180,17 +253,42 @@ export default function NewWorkoutPage() {
           </p>
           <div className="mt-3 p-3 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-900">
             <p className="text-sm text-blue-800 dark:text-blue-200">
-              💡 Todos os exercícios que você adicionar hoje serão agrupados no mesmo treino.
+              💡 Todos os exercícios que você adicionar serão agrupados no treino da data selecionada.
             </p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Exercício</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          {/* Layout em grid com 2 colunas no desktop, stack no mobile */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Data do Treino</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="workoutDate">Data</Label>
+                  <Input
+                    id="workoutDate"
+                    type="date"
+                    value={workoutDate}
+                    onChange={(e) => setWorkoutDate(e.target.value)}
+                    onClick={(e) => e.currentTarget.showPicker?.()}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:ml-auto [&::-webkit-calendar-picker-indicator]:scale-110"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Selecione o dia em que você realizou ou realizará o treino
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Exercício</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Grupo Muscular</Label>
                 <Select
@@ -235,11 +333,12 @@ export default function NewWorkoutPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
 
           <Card>
             <CardHeader className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <CardTitle>Séries</CardTitle>
+                <CardTitle>Adicionar Série</CardTitle>
                 <div className="flex gap-2 flex-wrap">
                   {sets.length > 1 && (
                     <Button
@@ -270,6 +369,33 @@ export default function NewWorkoutPage() {
                   <p className="text-sm text-green-800 dark:text-green-200">
                     ✓ Dados do último treino carregados. Você pode ajustar os valores conforme necessário.
                   </p>
+                </div>
+              )}
+              {todayWorkoutSets.length > 0 && (
+                <div className="p-4 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-900">
+                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-3">
+                    📋 Séries já adicionadas neste dia ({new Date(workoutDate).toLocaleDateString('pt-BR')})
+                  </h4>
+                  <div className="space-y-2">
+                    {Object.entries(
+                      todayWorkoutSets.reduce((acc, set) => {
+                        const exerciseName = set.exercise.name
+                        if (!acc[exerciseName]) acc[exerciseName] = []
+                        acc[exerciseName].push(set)
+                        return acc
+                      }, {} as Record<string, TodayWorkoutSet[]>)
+                    ).map(([exerciseName, sets]) => (
+                      <div key={exerciseName} className="flex items-start gap-2 text-sm">
+                        <Dumbbell className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <span className="font-medium text-blue-900 dark:text-blue-100">{exerciseName}:</span>{' '}
+                          <span className="text-blue-700 dark:text-blue-300">
+                            {sets.length} {sets.length === 1 ? 'série' : 'séries'} ({sets.map(s => `${s.weight}kg×${s.reps}`).join(', ')})
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </CardHeader>
