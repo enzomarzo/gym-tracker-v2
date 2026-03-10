@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Plus, Copy, Trash2, Dumbbell } from 'lucide-react'
-import { createClient } from '@/utils/supabase/client'
+import { Plus, Copy, Trash2 } from 'lucide-react'
+import { getWorkoutById, updateWorkoutSets, ExerciseGroupInput } from '@/queries/workouts'
 
 interface Set {
   id: string
@@ -22,12 +22,6 @@ interface ExerciseGroup {
   exerciseName: string
   muscleGroupName: string
   sets: Set[]
-}
-
-interface WorkoutData {
-  id: string
-  date: string
-  workout_sets: any[]
 }
 
 export default function EditWorkoutPage() {
@@ -48,33 +42,9 @@ export default function EditWorkoutPage() {
 
   const fetchWorkout = async () => {
     try {
-      const supabase = createClient()
-      
-      const { data, error } = await supabase
-        .from('workouts')
-        .select(`
-          id,
-          date,
-          workout_sets (
-            id,
-            weight,
-            reps,
-            set_number,
-            exercise_id,
-            exercises (
-              id,
-              name,
-              muscle_groups (
-                name
-              )
-            )
-          )
-        `)
-        .eq('id', workoutId)
-        .single()
+      const data = await getWorkoutById(workoutId)
 
-      if (error || !data) {
-        console.error('Erro ao carregar treino:', error)
+      if (!data) {
         setError('Treino não encontrado')
         return
       }
@@ -171,33 +141,7 @@ export default function EditWorkoutPage() {
 
     try {
       setIsSubmitting(true)
-      const supabase = createClient()
-
-      // Deletar todos os sets antigos
-      const { error: deleteError } = await supabase
-        .from('workout_sets')
-        .delete()
-        .eq('workout_id', workoutId)
-
-      if (deleteError) throw deleteError
-
-      // Inserir novos sets
-      const allSets = exerciseGroups.flatMap(group =>
-        group.sets.map((set, index) => ({
-          workout_id: workoutId,
-          exercise_id: group.exerciseId,
-          weight: parseFloat(set.weight),
-          reps: parseInt(set.reps),
-          set_number: index + 1
-        }))
-      )
-
-      const { error: insertError } = await supabase
-        .from('workout_sets')
-        .insert(allSets)
-
-      if (insertError) throw insertError
-
+      await updateWorkoutSets(workoutId, exerciseGroups as ExerciseGroupInput[])
       router.push('/workouts')
     } catch (err) {
       console.error('Erro ao atualizar treino:', err)

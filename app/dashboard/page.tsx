@@ -7,6 +7,8 @@ import { Trophy, Calendar, Dumbbell } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { WorkoutCard } from '@/components/WorkoutCard'
+import { getDashboardData } from '@/queries/dashboard'
+import { groupWorkoutsByDate } from '@/utils/workoutUtils'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -17,89 +19,19 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
-  const userId = user.id
-
-  // Buscar total de treinos
-  const { count: totalWorkouts } = await supabase
-    .from('workouts')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-
-  // Buscar último treino
-  const { data: lastWorkout } = await supabase
-    .from('workouts')
-    .select('date')
-    .eq('user_id', userId)
-    .order('date', { ascending: false })
-    .limit(1)
-    .single()
-
-  // Buscar todas as séries para calcular PR
-  const { data: workoutSets } = await supabase
-    .from('workout_sets')
-    .select(`
-      *,
-      exercises (
-        id,
-        name,
-        muscle_group_id
-      ),
-      workouts!inner (
-        user_id
-      )
-    `)
-    .eq('workouts.user_id', userId)
+  const {
+    totalWorkouts,
+    lastWorkout,
+    workoutSets,
+    recentWorkouts,
+    muscleGroups
+  } = await getDashboardData(user.id)
 
   const overallPR = workoutSets ? calculateOverallPR(workoutSets) : null
 
   const lastWorkoutDate = lastWorkout
     ? new Date(lastWorkout.date).toLocaleDateString('pt-BR')
     : 'Nenhum treino ainda'
-
-  // Buscar treinos recentes com detalhes
-  const { data: recentWorkouts } = await supabase
-    .from('workouts')
-    .select(`
-      id,
-      date,
-      user_id,
-      workout_sets (
-        id,
-        weight,
-        reps,
-        set_number,
-        exercise:exercises (
-          id,
-          name,
-          muscle_group_id
-        )
-      )
-    `)
-    .eq('user_id', userId)
-    .order('date', { ascending: false })
-    .limit(3)
-
-  // Buscar grupos musculares
-  const { data: muscleGroups } = await supabase
-    .from('muscle_groups')
-    .select('*')
-
-  // Agrupar workouts por data
-  const groupWorkoutsByDate = (workouts: any[]) => {
-    const grouped = workouts.reduce((acc, workout) => {
-      const dateKey = workout.date.split('T')[0] // Pega apenas a parte da data (YYYY-MM-DD)
-      if (!acc[dateKey]) {
-        acc[dateKey] = {
-          date: workout.date,
-          allSets: []
-        }
-      }
-      acc[dateKey].allSets.push(...workout.workout_sets)
-      return acc
-    }, {} as Record<string, { date: string, allSets: any[] }>)
-
-    return Object.values(grouped)
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -189,7 +121,7 @@ export default async function DashboardPage() {
             </div>
 
             <div className="space-y-4">
-              {groupWorkoutsByDate(recentWorkouts).map((dayGroup: any) => (
+              {groupWorkoutsByDate(recentWorkouts as any).map((dayGroup: any) => (
                 <WorkoutCard
                   key={dayGroup.date}
                   date={dayGroup.date}

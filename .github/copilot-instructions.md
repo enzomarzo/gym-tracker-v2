@@ -98,6 +98,39 @@ Zod schemas in `lib/validations/workout.ts`:
 - Client hooks: `hooks/use*.ts`
 - Type definitions: `types/database.types.ts`
 - Utilities: `utils/` (keep domain-specific logic like `calculatePR.ts`)
+- **DB queries**: `queries/` (centralized Supabase calls, never inline in pages)
+
+## Page Architecture & Separation of Concerns
+
+Every page must follow this separation:
+
+| Layer | Location | Responsibility |
+|---|---|---|
+| **Queries** | `queries/*.ts` | All Supabase DB calls |
+| **Utils** | `utils/*.ts` | Pure functions, shared logic |
+| **Hooks** | `hooks/use*.ts` | State + side-effects for client pages |
+| **Components** | `app/{route}/components/` | UI specific to that page only |
+| **Shared components** | `components/` | Reusable across pages |
+| **Page** | `app/{route}/page.tsx` | JSX rendering only, consumes hooks/queries |
+
+### Rules for new pages
+1. **DB calls go in `queries/`** — never call Supabase directly from a page or component.
+   - Client queries: use `createClient()` from `utils/supabase/client.ts`
+   - Server queries: use `await createClient()` from `utils/supabase/server.ts`
+2. **Shared logic goes in `utils/`** — if the same function appears in 2+ files, extract it.
+3. **Client page state goes in a hook** — create `hooks/use{PageName}Page.ts` for complex pages.
+4. **Page file only renders JSX** — import data from hooks or queries, no inline fetch logic.
+5. **Page-specific UI components** go in `app/{route}/components/`; reusable ones go in `components/`.
+
+### Existing query files
+- `queries/workouts.ts` — `getWorkouts`, `getWorkoutById`, `getTodayWorkoutSets`, `getLastWorkoutByExercise`, `updateWorkoutSets`
+- `queries/dashboard.ts` — `getDashboardData` (server-side, all dashboard data in one call)
+- `queries/progress.ts` — `getProgressByExercise`, `getWorkoutSetsForMuscleGroups`
+
+### Existing utility files
+- `utils/workoutUtils.ts` — `groupWorkoutsByDate`, `getUniqueDates`, `filterWorkouts`
+- `utils/progressUtils.ts` — `calculateMuscleGroupStats`
+- `utils/calculatePR.ts` — `calculateOverallPR`, `getProgressData`, `formatWeight`
 
 ## Development Workflow
 ```bash

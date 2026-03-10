@@ -10,24 +10,14 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useMuscleGroups, useExercises } from '@/hooks/useExercises'
 import { createWorkout } from '@/app/actions/workout'
-import { Plus, Copy, Trash2, Dumbbell } from 'lucide-react'
-import { createClient } from '@/utils/supabase/client'
+import { Plus, Copy, Trash2 } from 'lucide-react'
+import { getTodayWorkoutSets, getLastWorkoutByExercise, TodayWorkoutSet } from '@/queries/workouts'
+import { TodayWorkoutSummary } from './components/TodayWorkoutSummary'
 
 interface Set {
   id: string
   weight: string
   reps: string
-}
-
-interface TodayWorkoutSet {
-  id: string
-  weight: number
-  reps: number
-  set_number: number
-  exercise: {
-    name: string
-    muscle_group_id: string
-  }
 }
 
 export default function NewWorkoutPage() {
@@ -60,35 +50,14 @@ export default function NewWorkoutPage() {
 
     const fetchLastWorkout = async () => {
       setLoadingLastWorkout(true)
-      
+
       setSets([
         { id: '1', weight: '', reps: '' },
         { id: '2', weight: '', reps: '' }
       ])
 
       try {
-        const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-        
-        if (!user) return
-
-        const { data: lastWorkout } = await supabase
-          .from('workouts')
-          .select(`
-            id,
-            date,
-            workout_sets!inner (
-              weight,
-              reps,
-              set_number,
-              exercise_id
-            )
-          `)
-          .eq('user_id', user.id)
-          .eq('workout_sets.exercise_id', selectedExercise)
-          .order('date', { ascending: false })
-          .limit(1)
-          .single()
+        const lastWorkout = await getLastWorkoutByExercise(selectedExercise)
 
         if (lastWorkout && lastWorkout.workout_sets && lastWorkout.workout_sets.length > 0) {
           const sortedSets = [...lastWorkout.workout_sets].sort((a: any, b: any) => a.set_number - b.set_number)
@@ -114,39 +83,11 @@ export default function NewWorkoutPage() {
   // Buscar séries já adicionadas no dia selecionado
   const fetchTodayWorkoutSets = useCallback(async () => {
     if (!workoutDate) return
-    
+
     setLoadingTodaySets(true)
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) return
-
-      const { data: workouts } = await supabase
-        .from('workouts')
-        .select(`
-          id,
-          workout_sets (
-            id,
-            weight,
-            reps,
-            set_number,
-            exercise:exercises (
-              name,
-              muscle_group_id
-            )
-          )
-        `)
-        .eq('user_id', user.id)
-        .gte('date', `${workoutDate}T00:00:00`)
-        .lt('date', `${workoutDate}T23:59:59`)
-
-      if (workouts && workouts.length > 0) {
-        const allSets = workouts.flatMap(w => w.workout_sets || [])
-        setTodayWorkoutSets(allSets as any)
-      } else {
-        setTodayWorkoutSets([])
-      }
+      const sets = await getTodayWorkoutSets(workoutDate)
+      setTodayWorkoutSets(sets as any)
     } catch (err) {
       console.error('Erro ao buscar séries do dia:', err)
     } finally {
@@ -371,33 +312,7 @@ export default function NewWorkoutPage() {
                   </p>
                 </div>
               )}
-              {todayWorkoutSets.length > 0 && (
-                <div className="p-4 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-900">
-                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-3">
-                    📋 Séries já adicionadas neste dia ({new Date(workoutDate).toLocaleDateString('pt-BR')})
-                  </h4>
-                  <div className="space-y-2">
-                    {Object.entries(
-                      todayWorkoutSets.reduce((acc, set) => {
-                        const exerciseName = set.exercise.name
-                        if (!acc[exerciseName]) acc[exerciseName] = []
-                        acc[exerciseName].push(set)
-                        return acc
-                      }, {} as Record<string, TodayWorkoutSet[]>)
-                    ).map(([exerciseName, sets]) => (
-                      <div key={exerciseName} className="flex items-start gap-2 text-sm">
-                        <Dumbbell className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <span className="font-medium text-blue-900 dark:text-blue-100">{exerciseName}:</span>{' '}
-                          <span className="text-blue-700 dark:text-blue-300">
-                            {sets.length} {sets.length === 1 ? 'série' : 'séries'} ({sets.map(s => `${s.weight}kg×${s.reps}`).join(', ')})
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <TodayWorkoutSummary workoutDate={workoutDate} sets={todayWorkoutSets} />
             </CardHeader>
             <CardContent className="space-y-4">
               {sets.map((set, index) => (
