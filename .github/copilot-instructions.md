@@ -3,6 +3,11 @@
 ## Project Overview
 Next.js 16.1 gym tracking app with Supabase backend. Users log workouts with multiple sets per exercise, track PRs, and visualize progress over time. Portuguese language for all UI content.
 
+## Supabase Project
+- **Project ID**: `syzjbyyxzcxpdywkgicw` — ALWAYS use this ref for any Supabase MCP tool calls (SQL, migrations, storage, etc.)
+- **MCP server**: bound to `syzjbyyxzcxpdywkgicw` via `.vscode/mcp.json` — tools do NOT accept a `project_id` parameter
+
+
 ## Tech Stack & Architecture
 - **Framework**: Next.js 16.1 App Router (RSC + Server Actions)
 - **Database**: Supabase (PostgreSQL + Auth + RLS)

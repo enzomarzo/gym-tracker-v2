@@ -10,9 +10,10 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useMuscleGroups, useExercises } from '@/hooks/useExercises'
 import { createWorkout } from '@/app/actions/workout'
-import { Plus, Copy, Trash2 } from 'lucide-react'
+import { Plus, Copy, Trash2, PlusCircle, X } from 'lucide-react'
 import { getTodayWorkoutSets, getLastWorkoutByExercise, TodayWorkoutSet } from '@/queries/workouts'
 import { TodayWorkoutSummary } from './components/TodayWorkoutSummary'
+import { createCustomExercise } from '@/app/actions/exercise'
 
 interface Set {
   id: string
@@ -24,8 +25,12 @@ export default function NewWorkoutPage() {
   const router = useRouter()
   const { muscleGroups, loading: loadingGroups } = useMuscleGroups()
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string>('')
-  const { exercises, loading: loadingExercises } = useExercises(selectedMuscleGroup)
+  const { exercises, loading: loadingExercises, refetch: refetchExercises } = useExercises(selectedMuscleGroup)
   const [selectedExercise, setSelectedExercise] = useState<string>('')
+  const [showCreateExercise, setShowCreateExercise] = useState(false)
+  const [newExerciseName, setNewExerciseName] = useState('')
+  const [creatingExercise, setCreatingExercise] = useState(false)
+  const [createExerciseError, setCreateExerciseError] = useState<string | null>(null)
   const [workoutDate, setWorkoutDate] = useState<string>(
     new Date().toISOString().split('T')[0] // Data de hoje como padrão (YYYY-MM-DD)
   )
@@ -98,6 +103,30 @@ export default function NewWorkoutPage() {
   useEffect(() => {
     fetchTodayWorkoutSets()
   }, [fetchTodayWorkoutSets])
+
+  const handleCreateExercise = async () => {
+    if (!newExerciseName.trim() || !selectedMuscleGroup) return
+    setCreatingExercise(true)
+    setCreateExerciseError(null)
+    try {
+      const result = await createCustomExercise({
+        name: newExerciseName.trim(),
+        muscleGroupId: selectedMuscleGroup
+      })
+      if (result.error) {
+        setCreateExerciseError(result.error)
+        return
+      }
+      await refetchExercises()
+      setSelectedExercise(result.exercise!.id)
+      setShowCreateExercise(false)
+      setNewExerciseName('')
+    } catch {
+      setCreateExerciseError('Erro ao criar exercício. Tente novamente.')
+    } finally {
+      setCreatingExercise(false)
+    }
+  }
 
   const addSet = () => {
     const newId = (sets.length + 1).toString()
@@ -237,6 +266,8 @@ export default function NewWorkoutPage() {
                   onValueChange={(value) => {
                     setSelectedMuscleGroup(value)
                     setSelectedExercise('')
+                    setShowCreateExercise(false)
+                    setNewExerciseName('')
                   }}
                   disabled={loadingGroups}
                 >
@@ -254,23 +285,85 @@ export default function NewWorkoutPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Exercício</Label>
-                <Select
-                  value={selectedExercise}
-                  onValueChange={setSelectedExercise}
-                  disabled={!selectedMuscleGroup || loadingExercises}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o exercício" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {exercises.map((exercise) => (
-                      <SelectItem key={exercise.id} value={exercise.id}>
-                        {exercise.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between">
+                  <Label>Exercício</Label>
+                  {selectedMuscleGroup && !showCreateExercise && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCreateExercise(true)
+                        setCreateExerciseError(null)
+                        setNewExerciseName('')
+                      }}
+                      className="flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <PlusCircle className="h-3 w-3" />
+                      Criar novo
+                    </button>
+                  )}
+                </div>
+
+                {showCreateExercise ? (
+                  <div className="rounded-md border p-3 space-y-3 bg-muted/40">
+                    <p className="text-sm font-medium">Novo exercício</p>
+                    <input
+                      type="text"
+                      value={newExerciseName}
+                      onChange={(e) => setNewExerciseName(e.target.value)}
+                      placeholder="Nome do exercício"
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      autoFocus
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          await handleCreateExercise()
+                        } else if (e.key === 'Escape') {
+                          setShowCreateExercise(false)
+                        }
+                      }}
+                    />
+                    {createExerciseError && (
+                      <p className="text-xs text-destructive">{createExerciseError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleCreateExercise}
+                        disabled={creatingExercise || !newExerciseName.trim()}
+                        className="flex-1"
+                      >
+                        {creatingExercise ? 'Criando...' : 'Criar'}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowCreateExercise(false)}
+                        disabled={creatingExercise}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Select
+                    value={selectedExercise}
+                    onValueChange={setSelectedExercise}
+                    disabled={!selectedMuscleGroup || loadingExercises}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o exercício" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {exercises.map((exercise) => (
+                        <SelectItem key={exercise.id} value={exercise.id}>
+                          {exercise.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </CardContent>
           </Card>

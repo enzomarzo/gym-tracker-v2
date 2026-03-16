@@ -1,14 +1,14 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 import { Navbar } from '@/components/Navbar'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { calculateOverallPR, formatWeight } from '@/utils/calculatePR'
-import { Trophy, Calendar, Dumbbell } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Calendar, Dumbbell, Flame, Trophy } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { WorkoutCard } from '@/components/WorkoutCard'
 import { getDashboardData } from '@/queries/dashboard'
-import { groupWorkoutsByDate } from '@/utils/workoutUtils'
+import { groupWorkoutsByDate, getAthleteLevel, calculateStreak, getMotivationalMessage } from '@/utils/workoutUtils'
+import { WeekActivityCard } from './components/WeekActivityCard'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -22,12 +22,16 @@ export default async function DashboardPage() {
   const {
     totalWorkouts,
     lastWorkout,
-    workoutSets,
+    workoutsLast7Days,
+    workoutsLast30Days,
+    recentWorkoutDates,
     recentWorkouts,
     muscleGroups
   } = await getDashboardData(user.id)
 
-  const overallPR = workoutSets ? calculateOverallPR(workoutSets) : null
+  const streak = calculateStreak(recentWorkoutDates)
+  const athleteLevel = getAthleteLevel(recentWorkoutDates)
+  const motivationalMessage = getMotivationalMessage(streak, lastWorkout?.date ?? null)
 
   const lastWorkoutDate = lastWorkout
     ? new Date(lastWorkout.date).toLocaleDateString('pt-BR')
@@ -45,7 +49,7 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -79,30 +83,86 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                Personal Record
+                Últimos 7 dias
               </CardTitle>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{workoutsLast7Days || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                Idas à academia
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Últimos 30 dias
+              </CardTitle>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{workoutsLast30Days || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                Idas à academia
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Gamification Section */}
+        <div className="mt-6 grid gap-6 md:grid-cols-3">
+          {/* Motivational message + streak */}
+          <Card className="md:col-span-1 border-orange-200 dark:border-orange-900 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/40">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Sequência Atual</CardTitle>
+              <Flame className="h-4 w-4 text-orange-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold text-orange-500">{streak}</div>
+              <p className="text-xs text-muted-foreground mb-3">
+                {streak === 1 ? 'dia consecutivo' : 'dias consecutivos'}
+              </p>
+              <p className="text-sm font-medium text-foreground/80">{motivationalMessage}</p>
+            </CardContent>
+          </Card>
+
+          {/* Athlete level */}
+          <Card className="md:col-span-1">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Nível do Atleta</CardTitle>
               <Trophy className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              {overallPR ? (
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-2xl">{athleteLevel.emoji}</span>
+                <span className="text-2xl font-bold">{athleteLevel.title}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                média de {athleteLevel.avgPerWeek}×/semana (últimas 8 semanas)
+              </p>
+              {athleteLevel.nextLevelAt !== null && (
                 <>
-                  <div className="text-2xl font-bold">
-                    {formatWeight(overallPR.max_weight)}
+                  <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                    <div
+                      className="h-2 rounded-full bg-primary transition-all"
+                      style={{ width: `${athleteLevel.progress}%` }}
+                    />
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {overallPR.exercise_name}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">-</div>
-                  <p className="text-xs text-muted-foreground">
-                    Nenhum registro ainda
+                  <p className="text-xs text-muted-foreground mt-1">
+                    precisa de {athleteLevel.nextLevelAt}×/semana para subir de nível
                   </p>
                 </>
               )}
+              {athleteLevel.nextLevelAt === null && (
+                <p className="text-xs text-muted-foreground">Nível máximo atingido! 🏆</p>
+              )}
             </CardContent>
           </Card>
+
+          {/* This week activity */}
+          <WeekActivityCard dates={recentWorkoutDates} />
         </div>
 
         {/* Treinos Recentes */}

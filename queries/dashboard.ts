@@ -7,10 +7,20 @@ import { createClient } from '@/utils/supabase/server'
 export async function getDashboardData(userId: string) {
   const supabase = await createClient()
 
+  const now = new Date()
+  const date7DaysAgo = new Date(now)
+  date7DaysAgo.setDate(now.getDate() - 6)
+  const date30DaysAgo = new Date(now)
+  date30DaysAgo.setDate(now.getDate() - 29)
+  const date90DaysAgo = new Date(now)
+  date90DaysAgo.setDate(now.getDate() - 89)
+
   const [
     { count: totalWorkouts },
     { data: lastWorkout },
-    { data: workoutSets },
+    { count: workoutsLast7Days },
+    { count: workoutsLast30Days },
+    { data: recentWorkoutDates },
     { data: recentWorkouts },
     { data: muscleGroups }
   ] = await Promise.all([
@@ -28,19 +38,23 @@ export async function getDashboardData(userId: string) {
       .single(),
 
     supabase
-      .from('workout_sets')
-      .select(`
-        *,
-        exercises (
-          id,
-          name,
-          muscle_group_id
-        ),
-        workouts!inner (
-          user_id
-        )
-      `)
-      .eq('workouts.user_id', userId),
+      .from('workouts')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('date', date7DaysAgo.toISOString().split('T')[0]),
+
+    supabase
+      .from('workouts')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('date', date30DaysAgo.toISOString().split('T')[0]),
+
+    supabase
+      .from('workouts')
+      .select('date')
+      .eq('user_id', userId)
+      .gte('date', date90DaysAgo.toISOString().split('T')[0])
+      .order('date', { ascending: false }),
 
     supabase
       .from('workouts')
@@ -72,7 +86,9 @@ export async function getDashboardData(userId: string) {
   return {
     totalWorkouts,
     lastWorkout,
-    workoutSets,
+    workoutsLast7Days,
+    workoutsLast30Days,
+    recentWorkoutDates: recentWorkoutDates?.map(w => w.date) ?? [],
     recentWorkouts,
     muscleGroups
   }
