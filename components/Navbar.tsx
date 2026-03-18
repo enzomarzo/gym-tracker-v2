@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Dumbbell, Plus, TrendingUp, LogOut, ClipboardList } from 'lucide-react'
+import { Dumbbell, Plus, TrendingUp, LogOut, ClipboardList, Settings } from 'lucide-react'
 import { logout } from '@/app/actions/auth'
 
 export function Navbar() {
@@ -54,6 +54,16 @@ export function Navbar() {
               title="Sair"
             >
               <LogOut className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={pathname === '/settings' ? 'default' : 'ghost'}
+              size="icon"
+              asChild
+              title="Configurações"
+            >
+              <Link href="/settings">
+                <Settings className="h-4 w-4" />
+              </Link>
             </Button>
           </div>
         </div>

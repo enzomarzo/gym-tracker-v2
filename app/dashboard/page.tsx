@@ -9,6 +9,7 @@ import { WorkoutCard } from '@/components/WorkoutCard'
 import { getDashboardData } from '@/queries/dashboard'
 import { groupWorkoutsByDate, getAthleteLevel, calculateStreak, getMotivationalMessage } from '@/utils/workoutUtils'
 import { WeekActivityCard } from './components/WeekActivityCard'
+import { AiCoachButton } from './components/AiCoachButton'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -192,6 +193,7 @@ export default async function DashboardPage() {
             </div>
           </div>
         )}
+        <AiCoachButton />
       </main>
     </div>
   )

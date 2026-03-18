@@ -86,29 +86,25 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const maxWeight = (sets: { reps: number; weight: number }[]) =>
-    Math.max(...sets.map((s) => s.weight));
-  const avgReps = (sets: { reps: number; weight: number }[]) =>
-    Math.round(sets.reduce((acc, s) => acc + s.reps, 0) / sets.length);
+  const fmtDate = (d: string) => {
+    const [, m, day] = d.split("-");
+    return `${day}/${m}`;
+  };
 
   const exerciseSummaries = Object.entries(exerciseMap)
     .map(([name, data]) => {
       const sessions = data.sessions.sort((a, b) =>
         a.date.localeCompare(b.date),
       );
-      const freq = sessions.length;
-      const first = sessions[0];
-      const last = sessions[sessions.length - 1];
-      const weightDelta = maxWeight(last.sets) - maxWeight(first.sets);
-      const progression =
-        weightDelta > 0
-          ? `+${weightDelta}kg`
-          : weightDelta < 0
-            ? `${weightDelta}kg`
-            : "estagnado";
-      return `- ${name} (${data.muscle}): ${freq}x em 30 dias | última sessão: ${last.sets.length} séries, média ${avgReps(last.sets)} reps, max ${maxWeight(last.sets)}kg | progressão de carga: ${progression}`;
+      const sessionLines = sessions
+        .map((s) => {
+          const sets = s.sets.map((x) => `${x.reps}r@${x.weight}kg`).join(" · ");
+          return `    ${fmtDate(s.date)}: ${sets}`;
+        })
+        .join("\n");
+      return `${name} (${data.muscle}) — ${sessions.length} sessões:\n${sessionLines}`;
     })
-    .join("\n");
+    .join("\n\n");
 
   const muscleFreq = Object.entries(muscleGroupCount)
     .sort((a, b) => b[1] - a[1])
@@ -118,27 +114,31 @@ export async function POST(req: NextRequest) {
   const totalSessions = workouts.length;
   const avgPerWeek = ((totalSessions / 30) * 7).toFixed(1);
 
-  const systemPrompt = `Você é um personal trainer experiente. Analise os dados de treino abaixo e responda em português do Brasil de forma concisa e direta.
+  const systemPrompt = `Você é um personal trainer experiente. Analise o histórico completo de treinos abaixo (todas as sessões, todas as séries) e responda em português do Brasil de forma concisa e direta.
+
+Cada exercício mostra cada sessão no formato: DD/MM: reps@carga · reps@carga ...
+Use essa progressão ao longo das semanas para avaliar evolução real de carga e volume.
 
 Use EXATAMENTE esta estrutura:
 
 **✅ Pontos positivos**
-- **Nome do exercício:** observação curta e direta em 1 frase, focando no que foi bom (ex: progressão, consistência, faixa de reps ideal). Não repita dados brutos.
+- **Nome do exercício:** observação em 1 frase sobre a evolução ao longo das semanas (ex: progressão consistente de carga, volume crescente, faixa de reps ideal mantida).
 
 **⚠️ Problemas identificados**
-- **Nome do exercício ou grupo:** problema objetivo em 1 frase (ex: estagnação, desequilíbrio, frequência baixa). Não repita dados brutos.
+- **Nome do exercício ou grupo:** problema objetivo em 1 frase baseado na tendência das sessões (ex: carga estagnada nas últimas 3 semanas, reps caindo, desequilíbrio de volume).
 
 **🎯 Ações para esta semana**
-1. **Nome do exercício:** ação específica e prática em 1 frase (ex: tente X kg, acrescente 1 série, substitua por Y).
+1. **Nome do exercício:** ação específica e prática em 1 frase com referência ao valor atual (ex: passe de 25kg para 27,5kg, adicione 1 série, reduza para 20kg e foque na técnica).
 
-Regras obrigatórias:
-- Cada item começa com **Nome em negrito:** seguido de 1 frase curta — sem repetir os dados brutos de sessões/séries/reps/kg
-- Faixa ideal de hipertrofia: 6–12 reps, 3–5 séries
-- Se estagnado em 2+ sessões → sugira +carga, +série ou variação
-- Se reps > 15 → aumente carga; se reps < 5 → reduza carga
-- Máximo 2–3 itens por seção; máximo 200 palavras no total`;
+Princípios científicos para guiar a análise (não são regras rígidas — aplique com julgamento):
+- **Sobrecarga progressiva** (Zatsiorsky & Kraemer): a adaptação exige aumento gradual de estímulo (carga, volume ou densidade). Carga e reps estáveis por 3+ sessões sem sinal de adaptação = estagnação.
+- **Princípio da especificidade (SAID)**: infira o objetivo provável do padrão de treino (ex: faixas de reps baixas e cargas altas sugerem força; volume alto com reps moderadas sugere hipertrofia; frequência elevada com cargas leves sugere resistência muscular). Não assuma o objetivo — deduza-o.
+- **Relação volume-adaptação** (Schoenfeld, 2010; Krieger, 2010): volume insuficiente atrasa adaptação; volume excessivo sem recuperação aumenta risco de overreaching. Avalie a tendência de volume ao longo das semanas.
+- **Gestão da fadiga** (Haff & Triplett): queda de reps ou carga ao longo das semanas pode indicar acúmulo de fadiga, não apenas fraqueza — diferencie os dois na análise.
+- **Desequilíbrio de volume muscular**: grupos musculares com volume desproporcionalmente baixo em relação ao restante do treino merecem atenção (risco postural e de lesão).
+- Máximo 2-3 itens por seção; máximo 350 palavras no total`;
 
-  const userMessage = `Dados dos meus últimos 30 dias:\nSessões: ${totalSessions} (média ${avgPerWeek}x/semana)\nVolume por grupo muscular: ${muscleFreq}\n\nDetalhamento por exercício:\n${exerciseSummaries}`;
+  const userMessage = `Histórico dos meus últimos 30 dias:\nSessões de treino: ${totalSessions} (média ${avgPerWeek}x/semana)\nVolume por grupo muscular: ${muscleFreq}\n\nHistórico completo por exercício:\n${exerciseSummaries}`;
   console.log(`[ai-coach] enviando prompt — ${totalSessions} sessões, ${Object.keys(exerciseMap).length} exercícios`);
   console.log(`[ai-coach] userMessage:\n${userMessage}\n`);
 

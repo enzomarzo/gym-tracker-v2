@@ -165,18 +165,42 @@ export function getCurrentWeekActivity(dates: string[]): boolean[] {
 }
 
 export function getMotivationalMessage(streak: number, lastWorkoutDate: string | null): string {
-  if (!lastWorkoutDate) return 'Vamos começar! Registre seu primeiro treino. 🚀'
+  if (!lastWorkoutDate) return 'Nenhum treino ainda. Hoje é um ótimo dia pra começar! 🎯'
+
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const last = new Date(lastWorkoutDate + 'T00:00:00')
-  const diff = Math.round((today.getTime() - last.getTime()) / 86400000)
+  const todayIsWeekday = today.getDay() >= 1 && today.getDay() <= 5
 
-  if (diff === 0) {
-    if (streak >= 7) return `${streak} dias seguidos! Você é uma máquina! 🔥`
-    return 'Mandou bem hoje! Recupera bem pra volta mais forte. 💪'
+  const lastDate = new Date(lastWorkoutDate + 'T00:00:00')
+  const diffDays = Math.round((today.getTime() - lastDate.getTime()) / 86400000)
+
+  // Treinou hoje
+  if (diffDays === 0) {
+    return todayIsWeekday
+      ? 'O de hoje está pago! Vai descansar. 💪'
+      : 'Treinou no fim de semana?! Isso é nível outro. 🔥'
   }
-  if (diff === 1) return 'Bom descanso. Amanhã é dia de malhar! ⚡'
-  if (diff === 2) return 'Dois dias de descanso... hora de voltar! 💥'
-  if (diff <= 4) return `${diff} dias longe da academia. Seu físico está te chamando! 🏋️`
-  return 'A academia está com saudade de você. Bora! 🚀'
+
+  // 2+ dias seguidos e hoje ainda não treinou → dia de descanso sugerido
+  if (streak >= 2) {
+    return `boa, foi ${streak} dias seguidos no ginásio! Hoje pode ser dia de descanso. O músculo cresce no repouso também. 🛋️`
+  }
+
+  // Contar dias úteis perdidos desde o último treino
+  let missedWeekdays = 0
+  for (let i = 1; i <= diffDays; i++) {
+    const d = new Date(lastDate)
+    d.setDate(lastDate.getDate() + i)
+    const day = d.getDay()
+    if (day >= 1 && day <= 5) missedWeekdays++
+  }
+
+  // Treinou sexta, hoje é fim de semana → tranquilo
+  if (!todayIsWeekday && missedWeekdays === 0) {
+    return 'Descansando no fim de semana. Volta na segunda com tudo! 😎'
+  }
+
+  if (missedWeekdays === 1) return 'Já está um dia ausente... a semana ainda tem conserto! ⚡'
+  if (missedWeekdays === 2) return 'Está dois dias sem ir. A barra te mandou mensagem: "Cadê você?" 🏋️'
+  return `${missedWeekdays} dias úteis sem aparecer. Não precisa ser épico, só comparece! 🔥`
 }

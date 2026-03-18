@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Sparkles, Loader2, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
-import { getTodayAnalysis } from '@/queries/aiCoach'
+import { getLastAnalysis } from '@/queries/aiCoach'
 
 type ParsedSection = {
   title: string
@@ -106,13 +106,18 @@ export function AiCoachButton() {
   const [open, setOpen] = useState(false)
   const [blocked, setBlocked] = useState(false)
 
-  // Ao carregar, verificar se já existe análise de hoje no banco
+  const [analysisDate, setAnalysisDate] = useState<string | null>(null)
+
+  // Ao carregar, verificar se já existe análise no banco
   useEffect(() => {
-    getTodayAnalysis()
+    getLastAnalysis()
       .then(analysis => {
         if (analysis) {
           setResult(analysis.content)
-          setBlocked(true)
+          setAnalysisDate(analysis.created_at)
+          const today = new Date().toISOString().split('T')[0]
+          const analysisDay = analysis.created_at.split('T')[0]
+          setBlocked(analysisDay === today)
           setOpen(true)
         }
       })
@@ -134,6 +139,7 @@ export function AiCoachButton() {
       }
 
       setResult(data.result)
+      setAnalysisDate(new Date().toISOString())
       setOpen(true)
       setBlocked(true)
     } catch {
@@ -178,7 +184,19 @@ export function AiCoachButton() {
           )}
 
           {result && open && (
-            <AnalysisResult result={result} />
+            <div className="space-y-2">
+              {analysisDate && (
+                <p className="text-xs text-muted-foreground">
+                  Análise de{' '}
+                  {new Date(analysisDate).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </p>
+              )}
+              <AnalysisResult result={result} />
+            </div>
           )}
 
           {initializing ? (
@@ -204,7 +222,7 @@ export function AiCoachButton() {
               ) : (
                 <>
                   <Sparkles className="h-4 w-4 mr-2" />
-                  Avaliar meu progresso
+                  Nova avaliação do progresso
                 </>
               )}
             </Button>

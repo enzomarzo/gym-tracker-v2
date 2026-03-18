@@ -28,3 +28,17 @@ export async function logout() {
   revalidatePath('/', 'layout')
   redirect('/login')
 }
+
+export async function forgotPassword(email: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/reset-password`,
+  })
+
+  if (error) {
+    return { error: 'Erro ao enviar email. Verifique o endereço informado.' }
+  }
+
+  return { success: true }
+}
