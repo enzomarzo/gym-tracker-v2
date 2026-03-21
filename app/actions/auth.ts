@@ -32,11 +32,14 @@ export async function logout() {
 export async function forgotPassword(email: string) {
   const supabase = await createClient()
 
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/reset-password`,
-  })
+  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/reset-password`
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
 
   if (error) {
+    console.error('[forgotPassword] Supabase error:', error.message, '| redirectTo:', redirectTo)
+    if (error.status === 429 || error.message?.toLowerCase().includes('rate limit')) {
+      return { error: 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.' }
+    }
     return { error: 'Erro ao enviar email. Verifique o endereço informado.' }
   }
 

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,11 +11,30 @@ import { createClient } from '@/utils/supabase/client'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [exchanging, setExchanging] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const code = searchParams.get('code')
+    if (!code) {
+      setError('Link inválido. Solicite um novo email de redefinição.')
+      setExchanging(false)
+      return
+    }
+
+    const supabase = createClient()
+    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      if (error) {
+        setError('O link expirou ou já foi utilizado. Solicite um novo email de redefinição.')
+      }
+      setExchanging(false)
+    })
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,7 +54,7 @@ export default function ResetPasswordPage() {
 
     setLoading(false)
     if (error) {
-      setError('Erro ao redefinir senha. O link pode ter expirado.')
+      setError('Erro ao redefinir senha. Tente novamente.')
       return
     }
 
@@ -55,6 +74,11 @@ export default function ResetPasswordPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {exchanging ? (
+            <p className="text-center text-sm text-muted-foreground py-4">A verificar link…</p>
+          ) : error && !password ? (
+            <p className="text-sm text-destructive text-center">{error}</p>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="password">Nova senha</Label>
@@ -97,6 +121,7 @@ export default function ResetPasswordPage() {
               {loading ? 'Salvando...' : 'Salvar nova senha'}
             </Button>
           </form>
+          )}
         </CardContent>
       </Card>
     </div>

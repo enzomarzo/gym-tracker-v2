@@ -7,7 +7,8 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { WorkoutCard } from '@/components/WorkoutCard'
 import { getDashboardData } from '@/queries/dashboard'
-import { groupWorkoutsByDate, getAthleteLevel, calculateStreak, getMotivationalMessage } from '@/utils/workoutUtils'
+import { groupWorkoutsByDate, getAthleteLevel, calculateStreak } from '@/utils/workoutUtils'
+import { getMotivationalMessage, getMotivationalStatus } from '@/utils/motivationalUtils'
 import { WeekActivityCard } from './components/WeekActivityCard'
 import { AiCoachButton } from './components/AiCoachButton'
 
@@ -32,7 +33,8 @@ export default async function DashboardPage() {
 
   const streak = calculateStreak(recentWorkoutDates)
   const athleteLevel = getAthleteLevel(recentWorkoutDates)
-  const motivationalMessage = getMotivationalMessage(streak, lastWorkout?.date ?? null)
+  const motivationalMessage = getMotivationalMessage(recentWorkoutDates)
+  const motivationalStatus = getMotivationalStatus(recentWorkoutDates)
 
   const lastWorkoutDate = lastWorkout
     ? new Date(lastWorkout.date).toLocaleDateString('pt-BR')
@@ -117,15 +119,11 @@ export default async function DashboardPage() {
           {/* Motivational message + streak */}
           <Card className="md:col-span-1 border-orange-200 dark:border-orange-900 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/40">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Sequência Atual</CardTitle>
+              <CardTitle className="text-sm font-medium">{motivationalStatus}</CardTitle>
               <Flame className="h-4 w-4 text-orange-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-orange-500">{streak}</div>
-              <p className="text-xs text-muted-foreground mb-3">
-                {streak === 1 ? 'dia consecutivo' : 'dias consecutivos'}
-              </p>
-              <p className="text-sm font-medium text-foreground/80">{motivationalMessage}</p>
+              <p className="text-sm font-medium text-foreground/80 whitespace-pre-line">{motivationalMessage}</p>
             </CardContent>
           </Card>
 

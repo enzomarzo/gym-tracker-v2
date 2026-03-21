@@ -157,6 +157,7 @@ npm run lint         # ESLint check
 - **Portuguese**: All UI text, error messages, and content
 - **Dates**: Format with `.toLocaleDateString('pt-BR')`
 - **Icons**: lucide-react (already installed)
+- **Punctuation**: Use comma instead of em dash (—) in UI strings and motivational messages
 
 ## Common Gotchas
 - Always `await createClient()` in server context (RSC/Server Actions)
