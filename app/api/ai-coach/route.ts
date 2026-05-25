@@ -1,8 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import Groq from "groq-sdk";
 import { createClient } from "@/utils/supabase/server";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+const GOAL_LABELS: Record<string, string> = {
+  hypertrophy: "Hipertrofia (ganho de massa muscular)",
+  strength: "Força (aumentar carga máxima)",
+  weight_loss: "Perda de peso (redução de gordura corporal)",
+  endurance: "Resistência muscular",
+  general_fitness: "Condicionamento geral",
+  rehabilitation: "Reabilitação (prevenção de lesões)",
+};
+
+const GOAL_GUIDANCE: Record<string, string> = {
+  hypertrophy:
+    "Priorize volume e sobrecarga progressiva. Faixa ideal: 6-12 reps com cargas moderadas a pesadas. Verifique equilíbrio de volume por grupo muscular.",
+  strength:
+    "Foco em intensidade alta com baixo volume de reps (1-6). Movimentos compostos são prioritários. Monitore progressão de carga a cada sessão.",
+  weight_loss:
+    "Valorize alta frequência, densidade de treino e volume moderado. Faixas de 12-20 reps são benéficas. Atenção a quedas de desempenho que podem indicar déficit calórico excessivo.",
+  endurance:
+    "Reps altas (15-25+), intervalos curtos, progressão gradual de volume. Carga não é o principal indicador — durabilidade e consistência importam mais.",
+  general_fitness:
+    "Equilíbrio entre grupos musculares, frequência moderada e progressão sustentável. Variedade de estímulos é positiva.",
+  rehabilitation:
+    "Priorize execução técnica perfeita sobre carga. Alerte para quaisquer padrões de carga assimétrica ou grupos musculares negligenciados que aumentem risco de lesão.",
+};
+
 
 export async function POST(req: NextRequest) {
   // Verificar autenticação
@@ -29,9 +54,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ result: existingAnalysis.content, cached: true });
   }
 
-  // Buscar treinos dos últimos 30 dias
+  // Buscar treinos dos últimos 60 dias
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 29);
+  cutoff.setDate(cutoff.getDate() - 59);
   const { data: workouts, error } = await supabase
     .from("workouts")
     .select(
@@ -60,6 +85,31 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+
+  // Buscar objetivos do usuário
+  const { data: profileData } = await supabase
+    .from("user_profiles")
+    .select("goal_1, goal_2")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const goal1Label = profileData?.goal_1
+    ? GOAL_LABELS[profileData.goal_1] ?? profileData.goal_1
+    : null;
+  const goal2Label = profileData?.goal_2
+    ? GOAL_LABELS[profileData.goal_2] ?? profileData.goal_2
+    : null;
+  const goal1Guidance = profileData?.goal_1
+    ? GOAL_GUIDANCE[profileData.goal_1] ?? ""
+    : "";
+  const goal2Guidance = profileData?.goal_2
+    ? GOAL_GUIDANCE[profileData.goal_2] ?? ""
+    : "";
+
+  const goalsBlock = goal1Label
+    ? `\n\nOBJETIVOS DO ATLETA:\n- Objetivo principal: ${goal1Label}\n${goal1Guidance}${goal2Label ? `\n- Objetivo secundário: ${goal2Label}\n${goal2Guidance}` : ""}\n\nTodas as recomendações devem ser coerentes com esses objetivos. Se houver conflito entre os dois objetivos, priorize o objetivo principal.`
+    : "";
+
 
   // Calcular progressão por exercício e frequência por grupo muscular
   type ExerciseData = {
@@ -112,7 +162,7 @@ export async function POST(req: NextRequest) {
     .join(", ");
 
   const totalSessions = workouts.length;
-  const avgPerWeek = ((totalSessions / 30) * 7).toFixed(1);
+  const avgPerWeek = ((totalSessions / 60) * 7).toFixed(1);
 
   const systemPrompt = `Você é um personal trainer experiente. Analise o histórico completo de treinos abaixo (todas as sessões, todas as séries) e responda em português do Brasil de forma concisa e direta.
 
@@ -136,20 +186,20 @@ Princípios científicos para guiar a análise (não são regras rígidas — ap
 - **Relação volume-adaptação** (Schoenfeld, 2010; Krieger, 2010): volume insuficiente atrasa adaptação; volume excessivo sem recuperação aumenta risco de overreaching. Avalie a tendência de volume ao longo das semanas.
 - **Gestão da fadiga** (Haff & Triplett): queda de reps ou carga ao longo das semanas pode indicar acúmulo de fadiga, não apenas fraqueza — diferencie os dois na análise.
 - **Desequilíbrio de volume muscular**: grupos musculares com volume desproporcionalmente baixo em relação ao restante do treino merecem atenção (risco postural e de lesão).
-- Máximo 2-3 itens por seção; máximo 350 palavras no total`;
+- Máximo 2-3 itens por seção; máximo 350 palavras no total${goalsBlock}`;
 
-  const userMessage = `Histórico dos meus últimos 30 dias:\nSessões de treino: ${totalSessions} (média ${avgPerWeek}x/semana)\nVolume por grupo muscular: ${muscleFreq}\n\nHistórico completo por exercício:\n${exerciseSummaries}`;
+  const userMessage = `Histórico dos meus últimos 60 dias:\nSessões de treino: ${totalSessions} (média ${avgPerWeek}x/semana)\nVolume por grupo muscular: ${muscleFreq}\n\nHistórico completo por exercício:\n${exerciseSummaries}`;
   console.log(`[ai-coach] enviando prompt — ${totalSessions} sessões, ${Object.keys(exerciseMap).length} exercícios`);
   console.log(`[ai-coach] userMessage:\n${userMessage}\n`);
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      max_completion_tokens: 4000,
+      max_tokens: 4000,
     });
 
     const choice = completion.choices[0];
@@ -164,8 +214,8 @@ Princípios científicos para guiar a análise (não são regras rígidas — ap
 
     const usage = completion.usage;
     if (usage) {
-      const inputCost = (usage.prompt_tokens / 1_000_000) * 0.25;
-      const outputCost = (usage.completion_tokens / 1_000_000) * 2.00;
+      const inputCost = (usage.prompt_tokens / 1_000_000) * 0.59;
+      const outputCost = (usage.completion_tokens / 1_000_000) * 0.79;
       console.log(
         `[ai-coach] tokens — input: ${usage.prompt_tokens}, output: ${usage.completion_tokens}, total: ${usage.total_tokens}` +
           ` | custo estimado: $${(inputCost + outputCost).toFixed(6)}`,
@@ -185,7 +235,7 @@ Princípios científicos para guiar a análise (não são regras rígidas — ap
 
     return NextResponse.json({ result });
   } catch (err: any) {
-    console.error("OpenAI error:", err);
+    console.error("Groq error:", err);
     return NextResponse.json(
       { error: "Erro ao chamar IA. Verifique a chave da API." },
       { status: 500 },

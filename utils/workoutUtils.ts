@@ -153,7 +153,8 @@ export function getWeekActivity(dates: string[], weekOffset = 0): { activity: bo
   const activity = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    return set.has(d.toISOString().split('T')[0])
+    const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return set.has(localDate)
   })
 
   return { activity, label, trainedCount: activity.filter(Boolean).length }

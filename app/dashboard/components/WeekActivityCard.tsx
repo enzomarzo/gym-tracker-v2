@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Dumbbell, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getWeekActivity } from '@/utils/workoutUtils'
 
-const DAY_LABELS = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']
+const DAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const MIN_OFFSET = -7 // até 7 semanas atrás
 
 interface Props {
@@ -25,20 +25,27 @@ export function WeekActivityCard({ dates }: Props) {
       </CardHeader>
       <CardContent>
         <div className="flex gap-1.5 mt-1">
-          {activity.map((active, i) => (
-            <div key={i} className="flex flex-col items-center gap-1 flex-1">
-              <div
-                className={`w-full aspect-square rounded-md flex items-center justify-center text-xs font-bold transition-colors ${
-                  active
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-secondary text-muted-foreground'
-                }`}
-              >
-                {active ? '✓' : ''}
+          {activity.map((active, i) => {
+            const isWeekend = i === 5 || i === 6
+            return (
+              <div key={i} className="flex flex-col items-center gap-1 flex-1">
+                <div
+                  className={`w-full aspect-square rounded-md flex items-center justify-center text-xs font-bold transition-colors ${
+                    active
+                      ? 'bg-primary text-primary-foreground'
+                      : isWeekend
+                      ? 'bg-secondary/40 text-muted-foreground/40'
+                      : 'bg-secondary text-muted-foreground'
+                  }`}
+                >
+                  {active ? '✓' : ''}
+                </div>
+                <span className={`text-[10px] ${isWeekend && !active ? 'text-muted-foreground/40' : 'text-muted-foreground'}`}>
+                  {DAY_LABELS[i]}
+                </span>
               </div>
-              <span className="text-[10px] text-muted-foreground">{DAY_LABELS[i]}</span>
-            </div>
-          ))}
+            )
+          })}
         </div>
         <p className="text-xs text-muted-foreground mt-3">
           {trainedCount} de 7 dias treinados
