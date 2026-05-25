@@ -36,6 +36,15 @@ export interface WorkoutWithSets extends Workout {
   workout_sets: (WorkoutSet & { exercises: Exercise })[]
 }
 
+export interface UserProfile {
+  id: string
+  user_id: string
+  goal_1: string
+  goal_2: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface PRRecord {
   exercise_id: string
   exercise_name: string
